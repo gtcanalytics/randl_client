@@ -1,4 +1,4 @@
 try:
-    from . import randl_client
+    from .randl_client import randl_client
 except ImportError:
-    from . import randl_client
+    from .randl_client import randl_client
