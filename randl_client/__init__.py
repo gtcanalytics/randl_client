@@ -1,4 +1,4 @@
 try:
-    from .ecomp import ecomp
+    from .randl_client import randl_client
 except ImportError:
-    from .ecomp import ecomp
+    from .randl_client import randl_client
