@@ -287,7 +287,7 @@ class Randl:
 
 
 
-    def associate_bulletin(self, bulletin, required_phases=5, exclude_associated_phases=False, travel_time=900):
+    def associate_bulletin(self, bulletin, required_phases=5, exclude_associated_phases=False, travel_time=900, verbose=True):
         origins = pd.DataFrame(columns=['Window_start', 'Window_end', 'DML_mean_lat', 'DML_mean_lon', 'Beamsearch_lat', 
                                         'Beamsearch_lon', 'Beamsearch_time', 'Beamsearch_score'])
 
@@ -303,17 +303,19 @@ class Randl:
         associated_arids = []
 
         while starttime < bulletin_end:
-            print("Starting window at", starttime.strftime('%Y-%m-%dT%H:%M:%S'))
+            if verbose:
+                print("Starting window at", starttime.strftime('%Y-%m-%dT%H:%M:%S'))
             self.set_window_start(starttime.strftime('%Y-%m-%dT%H:%M:%S'))
             window = self.window_catalog(bulletin)
 
             try:
                 if len(window) > 0:
-                    print("Associated arrivals in window:  ", len(window))
+                    if verbose:
+                        print("Associated arrivals in window:  ", len(window))
 
                 window = window[~window['ARID'].isin(associated_arids)]
-
-                print("Unassociated arrivals in window:", len(window))
+                if verbose:
+                    print("Unassociated arrivals in window:", len(window))
                 if len(window) > 4:
 
                     window_end = parser.parse(window.TIME_ARRIV.iloc[len(window)-1])
@@ -344,7 +346,8 @@ class Randl:
 
 
                     if len(beam_result['used_arids']) < 5:
-                        print("No quality beams found")
+                        if verbose:
+                            print("No quality beams found")
                         starttime += timedelta(seconds=window_length)
                         continue
 
@@ -359,12 +362,13 @@ class Randl:
 
                 else:
                     starttime += timedelta(seconds=window_length)
-                    print("No arrivals. Moving window to start at", starttime.strftime('%Y-%m-%dT%H:%M:%S'))
+                    if verbose:
+                        print("No arrivals. Moving window to start at", starttime.strftime('%Y-%m-%dT%H:%M:%S'))
             except Exception as e:
                 starttime += timedelta(seconds=window_length)
                 print(e)
                 continue
-                
+        print(len(origins), "origins found in bulletin.")        
         return origins
 
             
