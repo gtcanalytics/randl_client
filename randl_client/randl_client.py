@@ -9,6 +9,7 @@ import sys
 import math
 import ast
 from io import StringIO
+from statistics import mean
 
 
 class Randl:    
@@ -27,14 +28,13 @@ class Randl:
         self.window_length = '1800'
         self.window_min_phases_needed= '5'
         self.window_exclude_associated_phases= 'False'
-        #self.window_exclude_duplicate_stations= 'True'
         self.window_step_size = 1
         
         #TODO finish setters for dml variables
         self.dml_models = ['pwave']
         self.dml_sampling = ['full']
         self.dml_num_samples = '10'
-        self.dml_arids = ['None'] # Update this to something cleaner/more robust
+        self.dml_arids = ['None'] 
         self.dml_pwave_modelpath = 'None'
         self.dml_exclude_duplicate_stations= 'True'
         self.dml_baz_modelpath = 'None'
@@ -207,7 +207,7 @@ class Randl:
 
         # Check the response
         if response.status_code == 200:
-            print("Success")
+            #print("Success")
         else:
             print("Error:", response.status_code, response.text)
             return None         
@@ -239,7 +239,7 @@ class Randl:
         response = requests.post(url, headers=headers, data=json.dumps(req))
 
         if response.status_code == 200:
-            print("Success")
+            #print("Success")
         else:
             print("Error:", response.status_code, response.text)
             return None
@@ -261,7 +261,7 @@ class Randl:
         }
         response = requests.post(url, headers=headers, data=json.dumps(req))
         if response.status_code == 200:
-            print("Success")
+            #print("Success")
         else:
             # If the request failed, print the error details
             print("Error:", response.status_code, response.text)
@@ -287,12 +287,94 @@ class Randl:
         }
         response = requests.post(url, headers=headers, data=json.dumps(req))
         if response.status_code == 200:
-            print("Success")
+            #print("Success")
         else:
             # If the request failed, print the error details
             print("Error:", response.status_code, response.text)
             
         return response.json()["result"]
+
+
+
+    def associate_bulletin(bulletin, required_phases=5, exclude_associated_phases=False, travel_time=900):
+        origins = pd.DataFrame(columns=['Window_start', 'Window_end', 'DML_mean_lat', 'DML_mean_lon', 'Beamsearch_lat', 
+                                        'Beamsearch_lon', 'Beamsearch_time', 'Beamsearch_score'])
+
+        window_length = travel_time
+        self.set_window_length(window_length)
+        self.set_window_phases_required(required_phases)
+        self.set_window_exclude_associated_phases(exclude_associated_phases)
+
+
+        starttime  = parser.parse(bulletin.iloc[0]['TIME_ARRIV'])
+        bulletin_end = parser.parse(bulletin.iloc[len(bulletin)-1]['TIME_ARRIV'])
+
+        associated_arids = []
+
+        while starttime < bulletin_end:
+            print("Starting window at", starttime.strftime('%Y-%m-%dT%H:%M:%S'))
+            self.set_window_start(starttime.strftime('%Y-%m-%dT%H:%M:%S'))
+            window = self.window_catalog(bulletin)
+
+            try:
+                if len(window) > 0:
+                    print("Associated arrivals in window:  ", len(window))
+
+                window = window[~window['ARID'].isin(associated_arids)]
+
+                print("Unassociated arrivals in window:", len(window))
+                if len(window) > 4:
+
+                    window_end = parser.parse(window.TIME_ARRIV.iloc[len(window)-1])
+                    window_start = parser.parse(window.TIME_ARRIV.iloc[0])
+
+                    dml_predictions = self.dml_prediction(window)
+
+                    beam_result = self.beamsearch(window, dml_predictions)
+
+                    dml_lat_mean = mean(dml_predictions.LAT_ORIG)
+                    dml_lon_mean = mean(dml_predictions.LON_ORIG)
+
+                    beamsearch_lon = beam_result['centroid'][0]
+
+                    beamsearch_lat = beam_result['centroid'][1]
+                    beamsearch_time = parser.parse(beam_result['time'])
+
+                    result=pd.DataFrame()
+                    result['Window_start'] = [window_start]
+                    result['Window_end'] = [window_end]
+                    result['DML_mean_lat'] = [dml_lat_mean]
+                    result['DML_mean_lon'] = [dml_lon_mean]
+                    result['Beamsearch_lat'] = [beamsearch_lat]
+                    result['Beamsearch_lon'] = [beamsearch_lon]
+                    result['Beamsearch_time'] = [beamsearch_time]
+                    result['Beamsearch_score'] = [beam_result['score']]
+                    origins = pd.concat([origins, result], ignore_index=True)
+
+
+                    if len(beam_result['used_arids']) < 5:
+                        print("No quality beams found")
+                        starttime += timedelta(seconds=window_length)
+                        continue
+
+                    associated_arids.extend(beam_result['used_arids'])
+
+                    window = window[~window['ARID'].isin(associated_arids)]
+
+                    if len(window) > 5:
+                        starttime = parser.parse(window.iloc[0]['TIME_ARRIV'])
+                    else:
+                        starttime += timedelta(seconds=window_length)
+
+                else:
+                    starttime += timedelta(seconds=window_length)
+                    print("No arrivals. Moving window to start at", starttime.strftime('%Y-%m-%dT%H:%M:%S'))
+            except Exception as e:
+                starttime += timedelta(seconds=window_length)
+                print(e)
+                continue
+                
+        return origins
 
             
     def __repr__ (self):
