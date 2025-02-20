@@ -206,9 +206,7 @@ class Randl:
         response = requests.post(url, headers=headers, data=json.dumps(req))
 
         # Check the response
-        if response.status_code == 200:
-            #print("Success")
-        else:
+        if response.status_code != 200:
             print("Error:", response.status_code, response.text)
             return None         
         
@@ -238,9 +236,7 @@ class Randl:
 
         response = requests.post(url, headers=headers, data=json.dumps(req))
 
-        if response.status_code == 200:
-            #print("Success")
-        else:
+        if response.status_code != 200:
             print("Error:", response.status_code, response.text)
             return None
         window = pd.read_json(StringIO(response.json()["result"]))
@@ -260,10 +256,7 @@ class Randl:
             "Content-Type": "application/json"
         }
         response = requests.post(url, headers=headers, data=json.dumps(req))
-        if response.status_code == 200:
-            #print("Success")
-        else:
-            # If the request failed, print the error details
+        if response.status_code != 200:
             print("Error:", response.status_code, response.text)
             return None
             
@@ -286,9 +279,7 @@ class Randl:
             "Content-Type": "application/json"
         }
         response = requests.post(url, headers=headers, data=json.dumps(req))
-        if response.status_code == 200:
-            #print("Success")
-        else:
+        if response.status_code != 200:
             # If the request failed, print the error details
             print("Error:", response.status_code, response.text)
             
