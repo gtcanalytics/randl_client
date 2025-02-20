@@ -287,7 +287,7 @@ class Randl:
 
 
 
-    def associate_bulletin(bulletin, required_phases=5, exclude_associated_phases=False, travel_time=900):
+    def associate_bulletin(self, bulletin, required_phases=5, exclude_associated_phases=False, travel_time=900):
         origins = pd.DataFrame(columns=['Window_start', 'Window_end', 'DML_mean_lat', 'DML_mean_lon', 'Beamsearch_lat', 
                                         'Beamsearch_lon', 'Beamsearch_time', 'Beamsearch_score'])
 
