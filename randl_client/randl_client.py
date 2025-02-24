@@ -342,7 +342,7 @@ class Randl:
                     result['Beamsearch_lon'] = [beamsearch_lon]
                     result['Beamsearch_time'] = [beamsearch_time]
                     result['Beamsearch_score'] = [beam_result['score']]
-                    result['associated_arids'] = beam_result['used_arids']
+                    result['associated_arids'] = [beam_result['used_arids']]
                     origins = pd.concat([origins, result], ignore_index=True)
 
 
