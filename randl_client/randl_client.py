@@ -11,11 +11,11 @@ import ast
 from io import StringIO
 from statistics import mean
 
-
 class Randl:    
     def __init__(self):        
         self.url_base = "http://seismic-ai.com:8011/randl/"
         #self.url_base = "http://127.0.0.1:8000/randl/"
+        self.api_key = ""
         
         self.bulletin_start = '2024-05-01T00:00:00'
         self.bulletin_end = '2024-05-11T00:00:00' 
@@ -200,7 +200,7 @@ class Randl:
               "seed": self.bulletin_seed }
 
         url = self.url_base + 'create_bulletin'
-        headers = {"accept": "application/json",
+        headers = {"accept": "application/json", "access_token": str(self.api_key),
             "Content-Type": "application/json"}
 
         response = requests.post(url, headers=headers, data=json.dumps(req))
@@ -231,7 +231,7 @@ class Randl:
                 "start_time":self.window_start, "catalog": bulletin_dic }
 
         url = self.url_base + 'window'
-        headers = {"accept": "application/json",
+        headers = {"accept": "application/json", "access_token": str(self.api_key),
             "Content-Type": "application/json"}
 
         response = requests.post(url, headers=headers, data=json.dumps(req))
@@ -252,7 +252,7 @@ class Randl:
         url = self.url_base + "dml_handler"
 
         headers = {
-            "accept": "application/json",
+            "accept": "application/json", "access_token": str(self.api_key),
             "Content-Type": "application/json"
         }
         response = requests.post(url, headers=headers, data=json.dumps(req))
@@ -269,13 +269,13 @@ class Randl:
 
         req = {"dml_predictions": dml_dict, "window": window_dict, "beam_width": self.beam_width, "max_dist": self.beam_max_dist,
               "max_time": self.beam_max_time, "sequence_dist": self.beam_sequence_dist, "sequence_time": self.beam_sequence_timedist,
-               "pwave_model": self.dml_pwave_modelpath, "baz_model": self.dml_baz_modelpath, "base_url": self.url_base}
+               "pwave_model": self.dml_pwave_modelpath, "baz_model": self.dml_baz_modelpath, "base_url": self.url_base, "api_key": self.api_key}
 
 
         url = self.url_base + "beamsearch"
 
         headers = {
-            "accept": "application/json",
+            "accept": "application/json", "access_token": str(self.api_key),
             "Content-Type": "application/json"
         }
         response = requests.post(url, headers=headers, data=json.dumps(req))
@@ -293,7 +293,7 @@ class Randl:
         url = self.url_base + "taup_surrogate"
 
         headers = {
-            "accept": "application/json",
+            "accept": "application/json", "access_token": str(self.api_key),
             "Content-Type": "application/json"
         }
         response = requests.post(url, headers=headers, data=json.dumps(req))
@@ -310,7 +310,7 @@ class Randl:
         url = self.url_base + "baz_surrogate"
 
         headers = {
-            "accept": "application/json",
+            "accept": "application/json", "access_token": str(self.api_key),
             "Content-Type": "application/json"
         }
         response = requests.post(url, headers=headers, data=json.dumps(req))
@@ -323,12 +323,11 @@ class Randl:
 
     def baz_geo_surrogate(self, source_lat, source_lon, st_lat, st_lon):
         req = {"source_lat": source_lat, "source_lon": source_lon, "st_lat": st_lat, "st_lon": st_lon}
-        print("326 req:", req)
 
         url = self.url_base + "baz_geo_surrogate"
 
         headers = {
-            "accept": "application/json",
+            "accept": "application/json", "access_token": str(self.api_key),
             "Content-Type": "application/json"
         }
         response = requests.post(url, headers=headers, data=json.dumps(req))
@@ -435,7 +434,7 @@ class Randl:
 
             
     def __repr__ (self):
-        return "URL2:" + self.url_base + "\n\n-Bulletin-\nStart:\t\t" + self.bulletin_start + "\nEnd:\t\t" + self.bulletin_end \
+        return "URL3:" + self.url_base + "\n\n-Bulletin-\nStart:\t\t" + self.bulletin_start + "\nEnd:\t\t" + self.bulletin_end \
     + "\nStations:\t" + self.bulletin_n_stations + "\nEvents:\t\t" + self.bulletin_n_events \
     + "\nDrop fraction:\t" + self.bulletin_drop_fraction + "\nSeed:\t" + self.bulletin_seed + "\n\n-Window-\nStart:\t\t\t" + self.window_start \
     + "\nLength:\t\t\t" + self.window_length + "\nMin_phases:\t\t" + self.window_min_phases_needed \
