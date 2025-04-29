@@ -15,6 +15,7 @@ class Randl:
     def __init__(self):        
         self.url_base = "http://seismic-ai.com:8011/randl/"
         #self.url_base = "http://127.0.0.1:8000/randl/"
+        self.api_key = ""
         
         self.bulletin_start = '2024-05-01T00:00:00'
         self.bulletin_end = '2024-05-11T00:00:00' 
@@ -199,7 +200,7 @@ class Randl:
               "seed": self.bulletin_seed }
 
         url = self.url_base + 'create_bulletin'
-        headers = {"accept": "application/json",
+        headers = {"accept": "application/json", "access_token": str(self.api_key),
             "Content-Type": "application/json"}
 
         response = requests.post(url, headers=headers, data=json.dumps(req))
@@ -230,7 +231,7 @@ class Randl:
                 "start_time":self.window_start, "catalog": bulletin_dic }
 
         url = self.url_base + 'window'
-        headers = {"accept": "application/json",
+        headers = {"accept": "application/json", "access_token": str(self.api_key),
             "Content-Type": "application/json"}
 
         response = requests.post(url, headers=headers, data=json.dumps(req))
@@ -251,7 +252,7 @@ class Randl:
         url = self.url_base + "dml_handler"
 
         headers = {
-            "accept": "application/json",
+            "accept": "application/json", "access_token": str(self.api_key),
             "Content-Type": "application/json"
         }
         response = requests.post(url, headers=headers, data=json.dumps(req))
@@ -274,7 +275,7 @@ class Randl:
         url = self.url_base + "beamsearch"
 
         headers = {
-            "accept": "application/json",
+            "accept": "application/json", "access_token": str(self.api_key),
             "Content-Type": "application/json"
         }
         response = requests.post(url, headers=headers, data=json.dumps(req))
@@ -292,7 +293,7 @@ class Randl:
         url = self.url_base + "taup_surrogate"
 
         headers = {
-            "accept": "application/json",
+            "accept": "application/json", "access_token": str(self.api_key),
             "Content-Type": "application/json"
         }
         response = requests.post(url, headers=headers, data=json.dumps(req))
@@ -309,7 +310,7 @@ class Randl:
         url = self.url_base + "baz_surrogate"
 
         headers = {
-            "accept": "application/json",
+            "accept": "application/json", "access_token": str(self.api_key),
             "Content-Type": "application/json"
         }
         response = requests.post(url, headers=headers, data=json.dumps(req))
@@ -326,7 +327,7 @@ class Randl:
         url = self.url_base + "baz_geo_surrogate"
 
         headers = {
-            "accept": "application/json",
+            "accept": "application/json", "access_token": str(self.api_key),
             "Content-Type": "application/json"
         }
         response = requests.post(url, headers=headers, data=json.dumps(req))
@@ -433,7 +434,7 @@ class Randl:
 
             
     def __repr__ (self):
-        return "URL3:" + self.url_base + "\n\n-Bulletin-\nStart:\t\t" + self.bulletin_start + "\nEnd:\t\t" + self.bulletin_end \
+        return "URL:" + self.url_base + "\nAPI Key:\t" + self.api_key + "\n\n-Bulletin-\nStart:\t\t" + self.bulletin_start + "\nEnd:\t\t" + self.bulletin_end \
     + "\nStations:\t" + self.bulletin_n_stations + "\nEvents:\t\t" + self.bulletin_n_events \
     + "\nDrop fraction:\t" + self.bulletin_drop_fraction + "\nSeed:\t" + self.bulletin_seed + "\n\n-Window-\nStart:\t\t\t" + self.window_start \
     + "\nLength:\t\t\t" + self.window_length + "\nMin_phases:\t\t" + self.window_min_phases_needed \
