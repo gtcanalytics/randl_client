@@ -1,6 +1,6 @@
 try:
     from .randl_client import Randl
-    from . import util
+    #from . import util
 except ImportError:
     from .randl_client import Randl
-    from . import util
+    #from . import util

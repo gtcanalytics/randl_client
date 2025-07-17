@@ -11,6 +11,8 @@ import ast
 from io import StringIO
 from statistics import mean
 
+client_version = "0.1.4"
+
 class Randl:    
     def __init__(self):        
         self.url_base = "http://seismic-ai.com:8011/randl/"
@@ -45,7 +47,52 @@ class Randl:
         self.beam_max_time = '500'
         self.beam_sequence_dist = '500'
         self.beam_sequence_timedist = '500'
-        
+
+
+        self.octree_time_spacing = '15'
+        self.octree_time_samples = '11'
+        self.octree_loc_samples = '11'
+        self.octree_loc_spacing = '0.017'
+        self.octree_time_threshold = '10'
+        self.octree_iterations = '3'
+
+
+    def set_octree_time_spacing(self, n):
+        if type(n) is int:
+            self.octree_time_spacing = str(n)
+        else:
+            print("Int required")
+
+    def set_octree_time_samples(self, n):
+        if type(n) is int:
+            self.octree_time_samples = str(n)
+        else:
+            print("Int required")
+
+    def set_octree_loc_samples(self, n):
+        if type(n) is int:
+            self.octree_loc_samples = str(n)
+        else:
+            print("Int required")
+
+    def set_octree_loc_spacing(self, n):
+        if type(n) is float:
+            self.octree_loc_spacing = str(n)
+        else:
+            print("Int required")
+
+    def set_octree_time_threshold(self, n):
+        if type(n) is int:
+            self.octree_time_threshold = str(n)
+        else:
+            print("Int required")
+
+    def set_octree_max_iterations(self, n):
+        if type(n) is int:
+            self.octree_iterations = str(n)
+        else:
+            print("Int required")
+
 
     def validate_datetime_bulletin(self, timestamp):
         try:
@@ -215,7 +262,7 @@ class Randl:
         bulletin.rename(rename_dic, axis='columns', inplace=True)
         bulletin['TIME_ARRIV'] = bulletin.TIME_ARRIV.astype(str)
         bulletin['ORIG_TIME'] = bulletin.ORIG_TIME.astype(str)
-        #bulletin['STA'] = bulletin.STA.astype(str)
+        bulletin['STA'] = bulletin.STA.astype(str)
         bulletin["BACK_AZIMUTH"]=0
         bulletin = bulletin.loc[bulletin.IPHASE == "P", :]
         bulletin.reset_index(drop=True, inplace=True)
@@ -286,6 +333,56 @@ class Randl:
         return response.json()["result"]
 
 
+    def octree_search(self, bulletin, beam_x, beam_y, beam_z, beam_time):
+        bulletin = bulletin.to_dict()
+
+        req = {"bulletin": bulletin, "time_spacing": self.octree_time_spacing, "time_threshold": self.octree_time_threshold,  
+        "loc_spacing": self.octree_loc_spacing, "loc_samples": self.octree_loc_samples,  "time_samples": self.octree_time_samples,  
+        "base_url": self.url_base,  "api_key": self.api_key, "iterations": self.octree_iterations,
+        "beam_x": beam_x, "beam_y": beam_y, "beam_z": beam_z, "beam_time": beam_time}
+
+        url = self.url_base + "octree_search"
+
+        headers = {
+            "accept": "application/json", "access_token": str(self.api_key),
+            "Content-Type": "application/json"
+        }
+        response = requests.post(url, headers=headers, data=json.dumps(req))
+        if response.status_code != 200:
+            # If the request failed, print the error details
+            print("Error:", response.status_code, response.text)
+            
+        return response.json()["result"]
+
+    def octree_bulletin_refinement(self, bulletin, origins):
+        bulletin = bulletin.to_dict()
+        try:
+            origins['Window_start'] = origins['Window_start'].astype(str)
+            origins['Window_end'] = origins['Window_end'].astype(str)
+            origins['Beamsearch_time'] = origins['Beamsearch_time'].astype(str)
+        except:
+            print("Missing expected beamsearch time columns")
+
+        origins = origins.to_dict()
+
+        req = {"bulletin": bulletin, "predictions": origins, "time_spacing": self.octree_time_spacing, "time_threshold": self.octree_time_threshold,  
+        "loc_spacing": self.octree_loc_spacing, "loc_samples": self.octree_loc_samples,  "time_samples": self.octree_time_samples,  
+        "base_url": self.url_base,  "api_key": self.api_key, "iterations": self.octree_iterations}
+
+        url = self.url_base + "octree_bulletin_refinement"
+
+        headers = {
+            "accept": "application/json", "access_token": str(self.api_key),
+            "Content-Type": "application/json"
+        }
+        response = requests.post(url, headers=headers, data=json.dumps(req))
+        if response.status_code != 200:
+            # If the request failed, print the error details
+            print("Error:", response.status_code, response.text)
+            
+        return pd.read_json(StringIO(response.json()["result"]))
+
+
 
     def taup_surrogate(self, inputs):
         req = {"inputs": inputs}
@@ -334,9 +431,142 @@ class Randl:
         if response.status_code != 200:
             print("Error:", response.status_code, response.text)
             return None
-            
+
         return response.json()["result"]
-        #return pd.read_json(StringIO(response.json()["result"]))         
+
+
+
+    def lonlat_to_geocentric(self, lon, lat, elev=0):
+        req = {"lon": lon, "lat": lat, "elev": elev}
+
+        url = self.url_base + "lonlat_to_geocentric"
+
+        headers = {
+            "accept": "application/json", "access_token": str(self.api_key),
+            "Content-Type": "application/json"
+        }
+        response = requests.post(url, headers=headers, data=json.dumps(req))
+        if response.status_code != 200:
+            print("Error:", response.status_code, response.text)
+            return None
+
+        return response.json()["result"]     
+
+
+    def geocentric_to_lonlat(self, x, y, z):
+        req = {"x": x, "y": y, "z": z}
+
+        url = self.url_base + "geocentric_to_lonlat"
+
+        headers = {
+            "accept": "application/json", "access_token": str(self.api_key),
+            "Content-Type": "application/json"
+        }
+        response = requests.post(url, headers=headers, data=json.dumps(req))
+        if response.status_code != 200:
+            print("Error:", response.status_code, response.text)
+            return None
+
+        return response.json()["result"]  
+
+
+    def scale_geocentric(self, x, y, z):
+        req = {"x": x, "y": y, "z": z}
+
+        url = self.url_base + "scale_geocentric"
+
+        headers = {
+            "accept": "application/json", "access_token": str(self.api_key),
+            "Content-Type": "application/json"
+        }
+        response = requests.post(url, headers=headers, data=json.dumps(req))
+        if response.status_code != 200:
+            print("Error:", response.status_code, response.text)
+            return None
+
+        return response.json()["result"] 
+
+
+    def unscale_geocentric(self, x, y, z):
+        req = {"x": x, "y": y, "z": z}
+
+        url = self.url_base + "unscale_geocentric"
+
+        headers = {
+            "accept": "application/json", "access_token": str(self.api_key),
+            "Content-Type": "application/json"
+        }
+        response = requests.post(url, headers=headers, data=json.dumps(req))
+        if response.status_code != 200:
+            print("Error:", response.status_code, response.text)
+            return None
+
+        return response.json()["result"] 
+
+
+
+    def scale_time(self, time):
+        req = {"time": time}
+
+        url = self.url_base + "scale_time"
+
+        headers = {
+            "accept": "application/json", "access_token": str(self.api_key),
+            "Content-Type": "application/json"
+        }
+        response = requests.post(url, headers=headers, data=json.dumps(req))
+        if response.status_code != 200:
+            print("Error:", response.status_code, response.text)
+            return None
+
+        return response.json()["result"]  
+
+
+    def unscale_time(self, time):
+        req = {"time": time}
+
+        url = self.url_base + "unscale_time"
+
+        headers = {
+            "accept": "application/json", "access_token": str(self.api_key),
+            "Content-Type": "application/json"
+        }
+        response = requests.post(url, headers=headers, data=json.dumps(req))
+        if response.status_code != 200:
+            print("Error:", response.status_code, response.text)
+            return None
+
+        return response.json()["result"]  
+
+
+    def version(self):
+        url = self.url_base + "version"
+
+        headers = {
+            "accept": "application/json", "access_token": str(self.api_key),
+            "Content-Type": "application/json"
+        }
+        response = requests.get(url, headers=headers)
+        if response.status_code != 200:
+            print("Error:", response.status_code, response.text)
+            return None
+
+        return response.json()['version'] 
+
+
+    def constants(self):
+        url = self.url_base + "constants"
+
+        headers = {
+            "accept": "application/json", "access_token": str(self.api_key),
+            "Content-Type": "application/json"
+        }
+        response = requests.get(url, headers=headers)
+        if response.status_code != 200:
+            print("Error:", response.status_code, response.text)
+            return None
+
+        return response.json() 
 
 
 
@@ -405,7 +635,6 @@ class Randl:
                     result['associated_arids'] = [beam_result['used_arids']]
                     origins = pd.concat([origins, result], ignore_index=True)
 
-
                     if len(beam_result['used_arids']) < 5:
                         if verbose:
                             print("No quality beams found")
@@ -434,14 +663,16 @@ class Randl:
 
             
     def __repr__ (self):
-        return "URL:" + self.url_base + "\nAPI Key:\t" + self.api_key + "\n\n-Bulletin-\nStart:\t\t" + self.bulletin_start + "\nEnd:\t\t" + self.bulletin_end \
+        return "RaNDL Client - Version:" + client_version + "\n\nServer URL:\t" + self.url_base + "\nAPI Key:\t" + self.api_key + "\n\n-Bulletin Parameters-\nStart:\t\t" + self.bulletin_start + "\nEnd:\t\t" + self.bulletin_end \
     + "\nStations:\t" + self.bulletin_n_stations + "\nEvents:\t\t" + self.bulletin_n_events \
-    + "\nDrop fraction:\t" + self.bulletin_drop_fraction + "\nSeed:\t" + self.bulletin_seed + "\n\n-Window-\nStart:\t\t\t" + self.window_start \
+    + "\nDrop fraction:\t" + self.bulletin_drop_fraction + "\nSeed:\t\t" + self.bulletin_seed + "\n\n-Window Parameters-\nStart:\t\t\t" + self.window_start \
     + "\nLength:\t\t\t" + self.window_length + "\nMin_phases:\t\t" + self.window_min_phases_needed \
-    + "\nExclude associated:\t" + self.window_exclude_associated_phases +"\n\n-DML-\nModels:\t\t" + str(self.dml_models) \
+    + "\nExclude associated:\t" + self.window_exclude_associated_phases +"\n\n-DML Parameters-\nModels:\t\t" + str(self.dml_models) \
     + "\nSampling:\t" + str(self.dml_sampling) + "\nNum_samples:\t" + str(self.dml_num_samples) \
     + "\nArids:\t\t" + str(self.dml_arids) + "\nPwave_model:\t" + str(self.dml_pwave_modelpath) \
-    + "\nBaz_model:\t" + str(self.dml_baz_modelpath) + "\nExclude stations:\t" + self.dml_exclude_duplicate_stations \
-    + "\n\n-Beamsearch-\nBeam width:\t" + self.beam_width + "\nMax dist:\t" + self.beam_max_dist \
-    + "\nMax time:\t" + self.beam_max_time + "\nSequence dist:\t" + self.beam_sequence_dist + "\nSequence time:\t" + self.beam_sequence_timedist
-
+    + "\nBaz_model:\t" + str(self.dml_baz_modelpath) + "\nExclude stations:" + self.dml_exclude_duplicate_stations \
+    + "\n\n-Beamsearch Parameters-\nBeam width:\t" + self.beam_width + "\nMax dist:\t" + self.beam_max_dist \
+    + "\nMax time:\t" + self.beam_max_time + "\nSequence dist:\t" + self.beam_sequence_dist \
+    + "\nSequence time:\t" + self.beam_sequence_timedist + "\n-Octree parameters-\nOctree time spacing:\t" + self.octree_time_spacing \
+    + "\nOctree time threshold:\t" + self.octree_time_threshold + "\nOctree time samples:\t" + self.octree_time_samples \
+    + "\nOctree loc spacing:\t" + self.octree_loc_spacing + "\nOctree loc samples:\t" + self.octree_loc_samples + "\nOctree max iterations:\t" + self.octree_iterations

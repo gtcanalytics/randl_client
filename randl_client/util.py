@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
-import pyproj
+#import pyproj
 from sklearn.preprocessing import MinMaxScaler
 from . import constant_vars
 
