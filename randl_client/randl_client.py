@@ -11,7 +11,7 @@ import ast
 from io import StringIO
 from statistics import mean
 
-client_version = "0.1.4"
+client_version = "0.1.5"
 
 class Randl:    
     def __init__(self):        
@@ -570,6 +570,7 @@ class Randl:
 
 
 
+
     def associate_bulletin(self, bulletin, required_phases=5, exclude_associated_phases=False, travel_time=900, verbose=True):
         origins = pd.DataFrame(columns=['Window_start', 'Window_end', 'DML_mean_lat', 'DML_mean_lon', 'Beamsearch_lat', 
                                         'Beamsearch_lon', 'Beamsearch_time', 'associated_arids', 'Beamsearch_score'])
@@ -660,6 +661,58 @@ class Randl:
                 continue
         print(len(origins), "origins found in bulletin.")        
         return origins
+
+
+    def octree_bulletin_association(self, bulletin, required_phases=5, exclude_associated_phases=False, travel_time=900, verbose=True):
+        print("---------Octree bulletin association---------")
+
+        used_arids = []
+        beamsearch_results = pd.DataFrame()
+        octree_results = pd.DataFrame()
+
+        iteration = 0
+
+        previous_bulletin_length = len(bulletin) + 2
+
+        while len(bulletin) > 6 and (previous_bulletin_length - len(bulletin)) > 1:
+            print("---Iteration:", iteration, "---")
+            print(len(bulletin), "arrivals remain in bulletin")
+            previous_bulletin_length = len(bulletin)
+
+            iteration += 1
+
+            beamsearch_origins = self.associate_bulletin(bulletin, required_phases, exclude_associated_phases, travel_time, verbose)
+            beamsearch_origins['iteration'] = iteration
+            beamsearch_results = pd.concat([beamsearch_results, beamsearch_origins], ignore_index=True)
+
+            if len(beamsearch_origins) < 1:
+                break
+
+
+            threshold = 0.85
+            origins_trimmed = beamsearch_origins[beamsearch_origins.Beamsearch_score > threshold]
+
+            if len(origins_trimmed) < 1:
+                threshold = 0.5
+                origins_trimmed = beamsearch_origins[beamsearch_origins.Beamsearch_score > threshold]
+                
+            refined_origins = self.octree_bulletin_refinement(bulletin, origins_trimmed)
+            refined_origins['iteration'] = iteration
+            octree_results = pd.concat([octree_results, refined_origins], ignore_index=True)
+
+            for index, row in refined_origins.iterrows():
+                used_arids.extend(row.used_arids)
+            used_arids = list(set(used_arids))
+
+            idx_to_keep = []
+
+            for index, row in bulletin.iterrows():
+                if row.ARID not in used_arids:
+                    idx_to_keep.append(index)
+
+            bulletin = bulletin.loc[idx_to_keep]
+
+        return beamsearch_results, octree_results
 
             
     def __repr__ (self):
