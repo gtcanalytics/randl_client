@@ -11,7 +11,7 @@ import ast
 from io import StringIO
 from statistics import mean
 
-client_version = "0.1.5"
+client_version = "0.1.6"
 
 class Randl:    
     def __init__(self):        
@@ -36,6 +36,7 @@ class Randl:
         self.dml_models = ['pwave']
         self.dml_sampling = ['full']
         self.dml_num_samples = '10'
+        self.dml_sta_count = '5'
         self.dml_arids = ['None'] 
         self.dml_pwave_modelpath = 'None'
         self.dml_exclude_duplicate_stations= 'True'
@@ -182,7 +183,14 @@ class Randl:
         if type(b) is int:
             self.dml_num_samples = str(b)
         else:
-            print("Int required")    
+            print("Int required")
+
+    def set_dml_sta_count(self, b):
+        if type(b) is int:
+            self.dml_sta_count = str(b)
+        else:
+            print("Int required")
+  
     
     # add input checking
     def set_dml_models(self, models):
@@ -287,12 +295,16 @@ class Randl:
             print("Error:", response.status_code, response.text)
             return None
         window = pd.read_json(StringIO(response.json()["result"]))
-        window['ORIG_TIME'] = window.ORIG_TIME.astype(str)    
+        try:
+            window['ORIG_TIME'] = window.ORIG_TIME.astype(str)    
+        except:
+            error = "No ORIG_TIME column"
+            #print("No ORIG_TIME column.")
         return window
         
     def dml_prediction(self, window):
         window_dict = window.to_dict()
-        req = {"models": self.dml_models, "sampling": self.dml_sampling, "num_samples": self.dml_num_samples, 
+        req = {"models": self.dml_models, "sampling": self.dml_sampling, "num_samples": self.dml_num_samples, "sta_count": self.dml_sta_count,
                "arids": self.dml_arids, "pwave_model": self.dml_pwave_modelpath, "baz_model": self.dml_baz_modelpath, 
                "exclude_duplicate_stations": self.dml_exclude_duplicate_stations, "catalog": window_dict }
 
@@ -315,7 +327,7 @@ class Randl:
         dml_dict = dml_predictions.to_dict()
 
         req = {"dml_predictions": dml_dict, "window": window_dict, "beam_width": self.beam_width, "max_dist": self.beam_max_dist,
-              "max_time": self.beam_max_time, "sequence_dist": self.beam_sequence_dist, "sequence_time": self.beam_sequence_timedist,
+              "max_time": self.beam_max_time, "sequence_dist": self.beam_sequence_dist, "sequence_time": self.beam_sequence_timedist, "sta_count": self.dml_sta_count,
                "pwave_model": self.dml_pwave_modelpath, "baz_model": self.dml_baz_modelpath, "base_url": self.url_base, "api_key": self.api_key}
 
 
@@ -721,7 +733,7 @@ class Randl:
     + "\nDrop fraction:\t" + self.bulletin_drop_fraction + "\nSeed:\t\t" + self.bulletin_seed + "\n\n-Window Parameters-\nStart:\t\t\t" + self.window_start \
     + "\nLength:\t\t\t" + self.window_length + "\nMin_phases:\t\t" + self.window_min_phases_needed \
     + "\nExclude associated:\t" + self.window_exclude_associated_phases +"\n\n-DML Parameters-\nModels:\t\t" + str(self.dml_models) \
-    + "\nSampling:\t" + str(self.dml_sampling) + "\nNum_samples:\t" + str(self.dml_num_samples) \
+    + "\nSampling:\t" + str(self.dml_sampling) + "\nNum_samples:\t" + str(self.dml_num_samples) + "\nNum_stations:\t" + str(self.dml_sta_count) \
     + "\nArids:\t\t" + str(self.dml_arids) + "\nPwave_model:\t" + str(self.dml_pwave_modelpath) \
     + "\nBaz_model:\t" + str(self.dml_baz_modelpath) + "\nExclude stations:" + self.dml_exclude_duplicate_stations \
     + "\n\n-Beamsearch Parameters-\nBeam width:\t" + self.beam_width + "\nMax dist:\t" + self.beam_max_dist \
