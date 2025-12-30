@@ -11,7 +11,7 @@ import ast
 from io import StringIO
 from statistics import mean
 
-client_version = "0.1.6"
+client_version = "0.1.7"
 
 class Randl:    
     def __init__(self):        
@@ -351,7 +351,7 @@ class Randl:
         req = {"bulletin": bulletin, "time_spacing": self.octree_time_spacing, "time_threshold": self.octree_time_threshold,  
         "loc_spacing": self.octree_loc_spacing, "loc_samples": self.octree_loc_samples,  "time_samples": self.octree_time_samples,  
         "base_url": self.url_base,  "api_key": self.api_key, "iterations": self.octree_iterations,
-        "beam_x": beam_x, "beam_y": beam_y, "beam_z": beam_z, "beam_time": beam_time}
+        "beam_x": beam_x, "beam_y": beam_y, "beam_z": beam_z, "beam_time": beam_time, 'window_length': self.window_length}
 
         url = self.url_base + "octree_search"
 
@@ -379,7 +379,7 @@ class Randl:
 
         req = {"bulletin": bulletin, "predictions": origins, "time_spacing": self.octree_time_spacing, "time_threshold": self.octree_time_threshold,  
         "loc_spacing": self.octree_loc_spacing, "loc_samples": self.octree_loc_samples,  "time_samples": self.octree_time_samples,  
-        "base_url": self.url_base,  "api_key": self.api_key, "iterations": self.octree_iterations}
+        "base_url": self.url_base,  "api_key": self.api_key, "iterations": self.octree_iterations, 'window_length': self.window_length}
 
         url = self.url_base + "octree_bulletin_refinement"
 
