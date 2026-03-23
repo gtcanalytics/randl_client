@@ -11,7 +11,7 @@ import ast
 from io import StringIO
 from statistics import mean
 
-client_version = "0.1.7"
+client_version = "0.2.0"
 
 class Randl:    
     def __init__(self):        
@@ -33,7 +33,7 @@ class Randl:
         self.window_step_size = 1
         
         #TODO finish setters for dml variables
-        self.dml_models = ['pwave']
+        self.dml_models = ['flex']
         self.dml_sampling = ['full']
         self.dml_num_samples = '10'
         self.dml_sta_count = '5'
@@ -308,7 +308,11 @@ class Randl:
                "arids": self.dml_arids, "pwave_model": self.dml_pwave_modelpath, "baz_model": self.dml_baz_modelpath, 
                "exclude_duplicate_stations": self.dml_exclude_duplicate_stations, "catalog": window_dict }
 
-        url = self.url_base + "dml_handler"
+
+        if self.dml_models[0] == 'flex':
+            url = self.url_base + "dml_flex_handler"
+        else:
+            url = self.url_base + "dml_pwave_handler"
 
         headers = {
             "accept": "application/json", "access_token": str(self.api_key),
@@ -581,9 +585,173 @@ class Randl:
         return response.json() 
 
 
+    def associate_bulletin(self, bulletin, required_phases=5, exclude_associated_phases=False, travel_time=1800, verbose=True):
+        origins = pd.DataFrame(columns=['Window_start', 'Window_end', 'DML_mean_lat', 'DML_mean_lon', 'Beam_lat', 
+                                        'Beam_lon', 'Beam_depth', 'Beam_time', 'Beam_score', 'Beam_arids', 'oct_lon',
+                                        'oct_lat', 'oct_depth', 'oct_time', 'oct_arids'])
+
+        window_length = travel_time
+        self.set_window_length(window_length)
+        self.set_window_phases_required(required_phases)
+        self.set_window_exclude_associated_phases(exclude_associated_phases)
+
+        bulletin.sort_values(by=['TIME_ARRIV'], inplace=True)
+
+        start_times = bulletin.TIME_ARRIV.value_counts()[:].index.tolist()
+        start_times = sorted(start_times)
+        start_index = 0
+        starttime = parser.parse(start_times[start_index])
+        bulletin_end = parser.parse(bulletin.iloc[len(bulletin)-1]['TIME_ARRIV'])
+
+        associated_arids = []
+
+        while starttime < bulletin_end:
+            if verbose:
+                print("Starting window at", starttime.strftime('%Y-%m-%dT%H:%M:%S'))
+            self.set_window_start(starttime.strftime('%Y-%m-%dT%H:%M:%S'))
+            window = self.window_catalog(bulletin)
+            window = window[~window['ARID'].isin(associated_arids)]
+
+            if len(window) < 5:
+                print("Not enough arrivals in window starting at", starttime.strftime('%Y-%m-%dT%H:%M:%S'))
+                try:
+                    start_index += 1
+                    starttime = parser.parse(start_times[start_index])
+                except:
+                    print("Couldn't increment start_idx")
+                    start_index -= 1
+                    break
+                continue
+            try:
+                window_end = parser.parse(window.TIME_ARRIV.iloc[len(window)-1])
+                window_start = parser.parse(window.TIME_ARRIV.iloc[0])
+            except:
+                start_index += 1
+                starttime = parser.parse(start_times[start_index])
+                continue
+
+            dml_predictions = self.dml_prediction(window)
+
+            beam_result = self.beamsearch(window, dml_predictions)
+
+            if len(beam_result['used_arids']) < 5:
+                if verbose:
+                    print("No quality beams found")
+                starttime += timedelta(seconds=300)
+                continue
+
+            if beam_result['score'] < 0.85:
+                print("Beam score too low")
+                try:
+                    start_index += 1
+                    starttime = parser.parse(start_times[start_index])
+                except:
+                    print("Couldn't increment start_idx")
+                    start_index -= 1
+                    break
+                continue
 
 
-    def associate_bulletin(self, bulletin, required_phases=5, exclude_associated_phases=False, travel_time=900, verbose=True):
+            dml_lat_mean = mean(dml_predictions.LAT_ORIG)
+            dml_lon_mean = mean(dml_predictions.LON_ORIG)
+
+            beamsearch_lon = beam_result['unscaled_centroid'][0]
+            beamsearch_lat = beam_result['unscaled_centroid'][1]
+            beamsearch_elev = beam_result['unscaled_centroid'][2]
+            beamsearch_x = beam_result['scaled_centroid'][0]
+            beamsearch_y = beam_result['scaled_centroid'][1]
+            beamsearch_z = beam_result['scaled_centroid'][2]
+            beamsearch_time = parser.parse(beam_result['time'])
+
+            octree_result = self.octree_search(bulletin, beamsearch_x, beamsearch_y, beamsearch_z, beam_result['time'])
+            associated_arids.extend(octree_result['used_arids'])
+
+            result=pd.DataFrame()
+            result['Window_start'] = [window_start]
+            result['Window_end'] = [window_end]
+            result['DML_mean_lat'] = [dml_lat_mean]
+            result['DML_mean_lon'] = [dml_lon_mean]
+            result['Beam_lat'] = [beamsearch_lat]
+            result['Beam_lon'] = [beamsearch_lon]
+            result['Beam_depth'] = [beamsearch_elev]
+            result['Beam_time'] = [beamsearch_time]
+            result['Beam_score'] = [beam_result['score']]
+            result['Beam_arids'] = [beam_result['used_arids']]
+            result['oct_lon'] = [octree_result['unscaled_loc'][0]]
+            result['oct_lat'] = [octree_result['unscaled_loc'][1]]
+            result['oct_depth'] = [octree_result['unscaled_loc'][2]]
+            result['oct_time'] = [octree_result['time']]
+            result['oct_arids'] = [octree_result['used_arids']]
+            origins = pd.concat([origins, result], ignore_index=True)
+
+            starttime = starttime + datetime.timedelta(minutes=5)
+            while start_index < len(start_times) -1 and parser.parse(start_times[start_index]) < starttime:
+                start_index += 1
+                
+            starttime = parser.parse(start_times[start_index])
+
+        print(len(origins), "origins found in bulletin.")        
+        return origins
+
+
+
+
+    def octree_bulletin_association(self, bulletin, required_phases=5, exclude_associated_phases=False, travel_time=900, verbose=True):
+        print("---------Octree bulletin association---------")
+
+        used_arids = []
+        beamsearch_results = pd.DataFrame()
+        octree_results = pd.DataFrame()
+
+        iteration = 0
+
+        previous_bulletin_length = len(bulletin) + 2
+
+        while len(bulletin) > 6 and (previous_bulletin_length - len(bulletin)) > 1:
+            print("---Iteration:", iteration, "---")
+            print(len(bulletin), "arrivals remain in bulletin")
+            previous_bulletin_length = len(bulletin)
+
+            iteration += 1
+
+            beamsearch_origins = self.associate_bulletin(bulletin, required_phases, exclude_associated_phases, travel_time, verbose)
+            beamsearch_origins['iteration'] = iteration
+            beamsearch_results = pd.concat([beamsearch_results, beamsearch_origins], ignore_index=True)
+
+            if len(beamsearch_origins) < 1:
+                break
+
+
+            threshold = 0.85
+            origins_trimmed = beamsearch_origins[beamsearch_origins.Beamsearch_score > threshold]
+
+            if len(origins_trimmed) < 1:
+                threshold = 0.5
+                origins_trimmed = beamsearch_origins[beamsearch_origins.Beamsearch_score > threshold]
+                
+            refined_origins = self.octree_bulletin_refinement(bulletin, origins_trimmed)
+            refined_origins['iteration'] = iteration
+            octree_results = pd.concat([octree_results, refined_origins], ignore_index=True)
+
+            for index, row in refined_origins.iterrows():
+                used_arids.extend(row.used_arids)
+            used_arids = list(set(used_arids))
+
+            idx_to_keep = []
+
+            for index, row in bulletin.iterrows():
+                if row.ARID not in used_arids:
+                    idx_to_keep.append(index)
+
+            bulletin = bulletin.loc[idx_to_keep]
+
+        return beamsearch_results, octree_results
+
+
+
+
+
+    def associate_bulletinv0(self, bulletin, required_phases=5, exclude_associated_phases=False, travel_time=900, verbose=True):
         origins = pd.DataFrame(columns=['Window_start', 'Window_end', 'DML_mean_lat', 'DML_mean_lon', 'Beamsearch_lat', 
                                         'Beamsearch_lon', 'Beamsearch_time', 'associated_arids', 'Beamsearch_score'])
 
@@ -675,7 +843,7 @@ class Randl:
         return origins
 
 
-    def octree_bulletin_association(self, bulletin, required_phases=5, exclude_associated_phases=False, travel_time=900, verbose=True):
+    def octree_bulletin_association_v0(self, bulletin, required_phases=5, exclude_associated_phases=False, travel_time=900, verbose=True):
         print("---------Octree bulletin association---------")
 
         used_arids = []
