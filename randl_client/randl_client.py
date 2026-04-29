@@ -606,11 +606,12 @@ class Randl:
         associated_arids = []
 
         while starttime < bulletin_end:
-            if verbose:
-                print("Starting window at", starttime.strftime('%Y-%m-%dT%H:%M:%S'))
             self.set_window_start(starttime.strftime('%Y-%m-%dT%H:%M:%S'))
             window = self.window_catalog(bulletin)
+            #print("Associated arids:", len(associated_arids))
+            #print("Length of window before removing arids:", len(window))
             window = window[~window['ARID'].isin(associated_arids)]
+            #print("Length of window after removing arids: ", len(window))
 
             if len(window) < 5:
                 print("Not enough arrivals in window starting at", starttime.strftime('%Y-%m-%dT%H:%M:%S'))
@@ -622,6 +623,9 @@ class Randl:
                     start_index -= 1
                     break
                 continue
+
+            if verbose:
+                print("Starting window at", starttime.strftime('%Y-%m-%dT%H:%M:%S'))
             try:
                 window_end = parser.parse(window.TIME_ARRIV.iloc[len(window)-1])
                 window_start = parser.parse(window.TIME_ARRIV.iloc[0])
@@ -655,32 +659,40 @@ class Randl:
             dml_lat_mean = mean(dml_predictions.LAT_ORIG)
             dml_lon_mean = mean(dml_predictions.LON_ORIG)
 
-            beamsearch_lon = beam_result['unscaled_centroid'][0]
-            beamsearch_lat = beam_result['unscaled_centroid'][1]
-            beamsearch_elev = beam_result['unscaled_centroid'][2]
-            beamsearch_x = beam_result['scaled_centroid'][0]
-            beamsearch_y = beam_result['scaled_centroid'][1]
-            beamsearch_z = beam_result['scaled_centroid'][2]
-            beamsearch_time = parser.parse(beam_result['time'])
 
-            octree_result = self.octree_search(bulletin, beamsearch_x, beamsearch_y, beamsearch_z, beam_result['time'])
-            associated_arids.extend(octree_result['used_arids'])
+            beam_lat = beam_result['unscaled_centroid'][0]
+            beam_lon = beam_result['unscaled_centroid'][1]
+            beam_depth = beam_result['unscaled_centroid'][2]#/1000
+            beam_time = beam_result['time']
+
+            try:
+                octree_result = self.octree_search(bulletin, beam_lat, beam_lon, beam_depth, beam_time)
+                associated_arids.extend(octree_result['used_arids'])
+            except:
+                print("no octree result")
+                starttime = starttime + datetime.timedelta(minutes=5)
+                while start_index < len(start_times) -1 and parser.parse(start_times[start_index]) < starttime:
+                    start_index += 1
+                
+                starttime = parser.parse(start_times[start_index])
+                continue
 
             result=pd.DataFrame()
             result['Window_start'] = [window_start]
             result['Window_end'] = [window_end]
             result['DML_mean_lat'] = [dml_lat_mean]
             result['DML_mean_lon'] = [dml_lon_mean]
-            result['Beam_lat'] = [beamsearch_lat]
-            result['Beam_lon'] = [beamsearch_lon]
-            result['Beam_depth'] = [beamsearch_elev]
-            result['Beam_time'] = [beamsearch_time]
+            result['Beam_lat'] = [beam_lat]
+            result['Beam_lon'] = [beam_lon]
+            result['Beam_depth'] = [beam_depth]
+            result['Beam_time'] = [beam_time]
             result['Beam_score'] = [beam_result['score']]
             result['Beam_arids'] = [beam_result['used_arids']]
             result['oct_lon'] = [octree_result['unscaled_loc'][0]]
             result['oct_lat'] = [octree_result['unscaled_loc'][1]]
             result['oct_depth'] = [octree_result['unscaled_loc'][2]]
             result['oct_time'] = [octree_result['time']]
+            result['oct_confidence'] = [octree_result['confidence']]
             result['oct_arids'] = [octree_result['used_arids']]
             origins = pd.concat([origins, result], ignore_index=True)
 
