@@ -11,7 +11,7 @@ import ast
 from io import StringIO
 from statistics import mean
 
-client_version = "0.2.0"
+client_version = "1.1.0"
 
 class Randl:    
     def __init__(self):        
@@ -301,6 +301,7 @@ class Randl:
             error = "No ORIG_TIME column"
             #print("No ORIG_TIME column.")
         return window
+
         
     def dml_prediction(self, window):
         window_dict = window.to_dict()
@@ -613,7 +614,7 @@ class Randl:
             window = window[~window['ARID'].isin(associated_arids)]
             #print("Length of window after removing arids: ", len(window))
 
-            if len(window) < 5:
+            if len(window) < 6:
                 print("Not enough arrivals in window starting at", starttime.strftime('%Y-%m-%dT%H:%M:%S'))
                 try:
                     start_index += 1
@@ -641,7 +642,7 @@ class Randl:
             if len(beam_result['used_arids']) < 5:
                 if verbose:
                     print("No quality beams found")
-                starttime += timedelta(seconds=300)
+                starttime += timedelta(seconds=720)
                 continue
 
             if beam_result['score'] < 0.85:
@@ -670,7 +671,7 @@ class Randl:
                 associated_arids.extend(octree_result['used_arids'])
             except:
                 print("no octree result")
-                starttime = starttime + datetime.timedelta(minutes=5)
+                starttime = starttime + datetime.timedelta(minutes=12)
                 while start_index < len(start_times) -1 and parser.parse(start_times[start_index]) < starttime:
                     start_index += 1
                 
@@ -696,7 +697,7 @@ class Randl:
             result['oct_arids'] = [octree_result['used_arids']]
             origins = pd.concat([origins, result], ignore_index=True)
 
-            starttime = starttime + datetime.timedelta(minutes=5)
+            starttime = starttime + datetime.timedelta(minutes=12)
             while start_index < len(start_times) -1 and parser.parse(start_times[start_index]) < starttime:
                 start_index += 1
                 
@@ -706,205 +707,6 @@ class Randl:
         return origins
 
 
-
-
-    def octree_bulletin_association(self, bulletin, required_phases=5, exclude_associated_phases=False, travel_time=900, verbose=True):
-        print("---------Octree bulletin association---------")
-
-        used_arids = []
-        beamsearch_results = pd.DataFrame()
-        octree_results = pd.DataFrame()
-
-        iteration = 0
-
-        previous_bulletin_length = len(bulletin) + 2
-
-        while len(bulletin) > 6 and (previous_bulletin_length - len(bulletin)) > 1:
-            print("---Iteration:", iteration, "---")
-            print(len(bulletin), "arrivals remain in bulletin")
-            previous_bulletin_length = len(bulletin)
-
-            iteration += 1
-
-            beamsearch_origins = self.associate_bulletin(bulletin, required_phases, exclude_associated_phases, travel_time, verbose)
-            beamsearch_origins['iteration'] = iteration
-            beamsearch_results = pd.concat([beamsearch_results, beamsearch_origins], ignore_index=True)
-
-            if len(beamsearch_origins) < 1:
-                break
-
-
-            threshold = 0.85
-            origins_trimmed = beamsearch_origins[beamsearch_origins.Beamsearch_score > threshold]
-
-            if len(origins_trimmed) < 1:
-                threshold = 0.5
-                origins_trimmed = beamsearch_origins[beamsearch_origins.Beamsearch_score > threshold]
-                
-            refined_origins = self.octree_bulletin_refinement(bulletin, origins_trimmed)
-            refined_origins['iteration'] = iteration
-            octree_results = pd.concat([octree_results, refined_origins], ignore_index=True)
-
-            for index, row in refined_origins.iterrows():
-                used_arids.extend(row.used_arids)
-            used_arids = list(set(used_arids))
-
-            idx_to_keep = []
-
-            for index, row in bulletin.iterrows():
-                if row.ARID not in used_arids:
-                    idx_to_keep.append(index)
-
-            bulletin = bulletin.loc[idx_to_keep]
-
-        return beamsearch_results, octree_results
-
-
-
-
-
-    def associate_bulletinv0(self, bulletin, required_phases=5, exclude_associated_phases=False, travel_time=900, verbose=True):
-        origins = pd.DataFrame(columns=['Window_start', 'Window_end', 'DML_mean_lat', 'DML_mean_lon', 'Beamsearch_lat', 
-                                        'Beamsearch_lon', 'Beamsearch_time', 'associated_arids', 'Beamsearch_score'])
-
-        window_length = travel_time
-        self.set_window_length(window_length)
-        self.set_window_phases_required(required_phases)
-        self.set_window_exclude_associated_phases(exclude_associated_phases)
-
-
-        starttime  = parser.parse(bulletin.iloc[0]['TIME_ARRIV'])
-        bulletin_end = parser.parse(bulletin.iloc[len(bulletin)-1]['TIME_ARRIV'])
-
-        associated_arids = []
-
-        while starttime < bulletin_end:
-            if verbose:
-                print("Starting window at", starttime.strftime('%Y-%m-%dT%H:%M:%S'))
-            self.set_window_start(starttime.strftime('%Y-%m-%dT%H:%M:%S'))
-            window = self.window_catalog(bulletin)
-
-            try:
-                if len(window) > 0:
-                    if verbose:
-                        print("Associated arrivals in window:  ", len(window))
-
-                window = window[~window['ARID'].isin(associated_arids)]
-                if verbose:
-                    print("Unassociated arrivals in window:", len(window))
-                if len(window) > 4:
-
-                    window_end = parser.parse(window.TIME_ARRIV.iloc[len(window)-1])
-                    window_start = parser.parse(window.TIME_ARRIV.iloc[0])
-
-                    dml_predictions = self.dml_prediction(window)
-
-                    beam_result = self.beamsearch(window, dml_predictions)
-
-                    dml_lat_mean = mean(dml_predictions.LAT_ORIG)
-                    dml_lon_mean = mean(dml_predictions.LON_ORIG)
-
-                    beamsearch_lon = beam_result['unscaled_centroid'][0]
-                    beamsearch_lat = beam_result['unscaled_centroid'][1]
-                    beamsearch_elev = beam_result['unscaled_centroid'][2]
-                    beamsearch_x = beam_result['scaled_centroid'][0]
-                    beamsearch_y = beam_result['scaled_centroid'][1]
-                    beamsearch_z = beam_result['scaled_centroid'][2]
-                    beamsearch_time = parser.parse(beam_result['time'])
-
-                    result=pd.DataFrame()
-                    result['Window_start'] = [window_start]
-                    result['Window_end'] = [window_end]
-                    result['DML_mean_lat'] = [dml_lat_mean]
-                    result['DML_mean_lon'] = [dml_lon_mean]
-                    result['Beamsearch_lat'] = [beamsearch_lat]
-                    result['Beamsearch_lon'] = [beamsearch_lon]
-                    result['Beamsearch_elev'] = [beamsearch_elev]
-                    result['Beamsearch_x'] = [beamsearch_x]
-                    result['Beamsearch_y'] = [beamsearch_y]
-                    result['Beamsearch_z'] = [beamsearch_z]
-                    result['Beamsearch_time'] = [beamsearch_time]
-                    result['Beamsearch_score'] = [beam_result['score']]
-                    result['associated_arids'] = [beam_result['used_arids']]
-                    origins = pd.concat([origins, result], ignore_index=True)
-
-                    if len(beam_result['used_arids']) < 5:
-                        if verbose:
-                            print("No quality beams found")
-                        starttime += timedelta(seconds=window_length)
-                        continue
-
-                    associated_arids.extend(beam_result['used_arids'])
-
-                    window = window[~window['ARID'].isin(associated_arids)]
-
-                    if len(window) > 5:
-                        starttime = parser.parse(window.iloc[0]['TIME_ARRIV'])
-                    else:
-                        starttime += timedelta(seconds=window_length)
-
-                else:
-                    starttime += timedelta(seconds=window_length)
-                    if verbose:
-                        print("No arrivals. Moving window to start at", starttime.strftime('%Y-%m-%dT%H:%M:%S'))
-            except Exception as e:
-                starttime += timedelta(seconds=window_length)
-                print(e)
-                continue
-        print(len(origins), "origins found in bulletin.")        
-        return origins
-
-
-    def octree_bulletin_association_v0(self, bulletin, required_phases=5, exclude_associated_phases=False, travel_time=900, verbose=True):
-        print("---------Octree bulletin association---------")
-
-        used_arids = []
-        beamsearch_results = pd.DataFrame()
-        octree_results = pd.DataFrame()
-
-        iteration = 0
-
-        previous_bulletin_length = len(bulletin) + 2
-
-        while len(bulletin) > 6 and (previous_bulletin_length - len(bulletin)) > 1:
-            print("---Iteration:", iteration, "---")
-            print(len(bulletin), "arrivals remain in bulletin")
-            previous_bulletin_length = len(bulletin)
-
-            iteration += 1
-
-            beamsearch_origins = self.associate_bulletin(bulletin, required_phases, exclude_associated_phases, travel_time, verbose)
-            beamsearch_origins['iteration'] = iteration
-            beamsearch_results = pd.concat([beamsearch_results, beamsearch_origins], ignore_index=True)
-
-            if len(beamsearch_origins) < 1:
-                break
-
-
-            threshold = 0.85
-            origins_trimmed = beamsearch_origins[beamsearch_origins.Beamsearch_score > threshold]
-
-            if len(origins_trimmed) < 1:
-                threshold = 0.5
-                origins_trimmed = beamsearch_origins[beamsearch_origins.Beamsearch_score > threshold]
-                
-            refined_origins = self.octree_bulletin_refinement(bulletin, origins_trimmed)
-            refined_origins['iteration'] = iteration
-            octree_results = pd.concat([octree_results, refined_origins], ignore_index=True)
-
-            for index, row in refined_origins.iterrows():
-                used_arids.extend(row.used_arids)
-            used_arids = list(set(used_arids))
-
-            idx_to_keep = []
-
-            for index, row in bulletin.iterrows():
-                if row.ARID not in used_arids:
-                    idx_to_keep.append(index)
-
-            bulletin = bulletin.loc[idx_to_keep]
-
-        return beamsearch_results, octree_results
 
             
     def __repr__ (self):
